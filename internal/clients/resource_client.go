@@ -45,6 +45,43 @@ func NewResourceClient(subscriptionID string, credential azcore.TokenCredential,
 	}, nil
 }
 
+func (client *ResourceClient) SubscriptionID() string {
+	return client.subscriptionID
+}
+
+func (client *ResourceClient) PreflightValidate(ctx context.Context, body map[string]interface{}) (interface{}, error) {
+	req, err := client.preflightRequest(ctx, body)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := client.pl.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	if !runtime.HasStatusCode(resp, http.StatusOK) {
+		return nil, runtime.NewResponseError(resp)
+	}
+
+	var responseBody interface{}
+	if err := runtime.UnmarshalAsJSON(resp, &responseBody); err != nil {
+		return nil, err
+	}
+	return responseBody, nil
+}
+
+func (client *ResourceClient) preflightRequest(ctx context.Context, body map[string]interface{}) (*policy.Request, error) {
+	urlPath := `/providers/Microsoft.Resources/validateResources`
+	req, err := runtime.NewRequest(ctx, http.MethodPost, runtime.JoinPaths(client.host, urlPath))
+	if err != nil {
+		return nil, err
+	}
+	reqQP := req.Raw().URL.Query()
+	reqQP.Set("api-version", `2020-10-01`)
+	req.Raw().URL.RawQuery = reqQP.Encode()
+	req.Raw().Header.Set("Accept", "application/json")
+	return req, runtime.MarshalAsJSON(req, body)
+}
+
 func (client *ResourceClient) CreateOrUpdate(ctx context.Context, resourceID string, apiVersion string, body interface{}) (interface{}, error) {
 	resp, err := client.createOrUpdate(ctx, resourceID, apiVersion, body)
 	if err != nil {

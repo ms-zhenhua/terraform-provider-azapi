@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/url"
 	"reflect"
+	"strings"
 	"time"
 
 	"github.com/Azure/terraform-provider-azapi/internal/azure"
@@ -137,6 +138,12 @@ func ResourceAzApiResource() *schema.Resource {
 				Default:  true,
 			},
 
+			"preflight_validation_enabled": {
+				Type:     schema.TypeBool,
+				Optional: true,
+				Default:  true,
+			},
+
 			"output": {
 				Type:     schema.TypeString,
 				Computed: true,
@@ -215,7 +222,10 @@ func ResourceAzApiResource() *schema.Resource {
 				}
 			}
 
-			if d.Get("schema_validation_enabled").(bool) {
+			preflightRawValue := d.GetRawConfig().AsValueMap()["preflight_validation_enabled"]
+			preflightEnabled := preflightRawValue.IsNull() || preflightRawValue.True()
+
+			if d.Get("schema_validation_enabled").(bool) || preflightEnabled {
 				if value, ok := d.GetOk("tags"); ok && isConfigExist(config, "tags") {
 					tagsModel := tags.ExpandTags(value.(map[string]interface{}))
 					if len(tagsModel) != 0 {
@@ -234,10 +244,43 @@ func ResourceAzApiResource() *schema.Resource {
 						body["identity"] = identityModel
 					}
 				}
-				if err := schemaValidation(azureResourceType, apiVersion, resourceDef, body); err != nil {
-					return err
+
+				if d.Get("schema_validation_enabled").(bool) {
+					if err := schemaValidation(azureResourceType, apiVersion, resourceDef, body); err != nil {
+						return err
+					}
+				}
+
+				if preflightEnabled {
+					resourceBody := make(map[string]interface{})
+					for k, v := range body {
+						resourceBody[k] = v
+					}
+
+					resourceBody["name"] = d.Get("name").(string)
+					resourceBody["apiVersion"] = strings.Split(d.Get("type").(string), "@")[1]
+
+					preflightBody := make(map[string]interface{})
+					preflightBody["provider"] = strings.Split(d.Get("type").(string), "/")[0]
+					preflightBody["type"] = strings.Split(d.Get("type").(string), "@")[0]
+					if _, ok := body["location"]; ok {
+						preflightBody["location"] = body["location"]
+					}
+
+					if d.Get("parent_id").(string) != "" {
+						preflightBody["scope"] = d.Get("parent_id").(string)
+					} else {
+						preflightBody["scope"] = fmt.Sprintf(`/subscriptions/%s`, meta.(*clients.Client).ResourceClient.SubscriptionID())
+					}
+
+					preflightBody["resources"] = []interface{}{resourceBody}
+
+					if err := preflightValidation(meta, preflightBody); err != nil {
+						return err
+					}
 				}
 			}
+
 			return nil
 		},
 	}
@@ -395,6 +438,8 @@ func resourceAzApiResourceRead(d *schema.ResourceData, meta interface{}) error {
 		// #nosec G104
 		d.Set("body", string(data))
 	}
+
+	d.Set("preflight_validation_enabled", d.Get("preflight_validation_enabled"))
 
 	// #nosec G104
 	d.Set("name", id.Name)

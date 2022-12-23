@@ -1,8 +1,13 @@
 package services
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/Azure/terraform-provider-azapi/internal/clients"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	"time"
+
 	"log"
 	"strings"
 
@@ -10,6 +15,15 @@ import (
 	"github.com/Azure/terraform-provider-azapi/internal/azure/types"
 	"github.com/Azure/terraform-provider-azapi/utils"
 )
+
+func preflightValidation(meta interface{}, body map[string]interface{}) error {
+	client := meta.(*clients.Client).ResourceClient
+	ctx, cancel := context.WithTimeout(meta.(*clients.Client).StopContext, *schema.DefaultTimeout(3 * time.Minute))
+	defer cancel()
+
+	_, err := client.PreflightValidate(ctx, body)
+	return err
+}
 
 func schemaValidation(azureResourceType, apiVersion string, resourceDef *types.ResourceType, body interface{}) error {
 	log.Printf("[INFO] prepare validation for resource type: %s, api-version: %s", azureResourceType, apiVersion)
