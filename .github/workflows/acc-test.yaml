@@ -1,16 +1,21 @@
----
 name: Acc Tests
+
 on:
   workflow_dispatch:
     inputs:
       ARM_USE_OIDC:
-        description: 'ARM_USE_OIDC'
-        required: false
         type: boolean
+        description: ARM_USE_OIDC
+        required: true
+        default: false
       TESTARGS:
-        description: 'TESTARGS'
+        description: TESTARGS
         required: false
         type: string
+
+permissions:
+  id-token: write
+  contents: read
 
 jobs:
   test:
