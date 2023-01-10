@@ -1,5 +1,16 @@
 ---
 name: Acc Tests
+on:
+  workflow_dispatch:
+    inputs:
+      ARM_USE_OIDC:
+        description: 'ARM_USE_OIDC'
+        required: false
+        type: boolean
+      TESTARGS:
+        description: 'TESTARGS'
+        required: false
+        type: string
 
 jobs:
   test:
@@ -22,5 +33,5 @@ jobs:
           ARM_TEST_LOCATION: ${{ secrets.ARM_TEST_LOCATION }}
           ARM_TEST_LOCATION_ALT: ${{ secrets.ARM_TEST_LOCATION_ALT }}
           ARM_TEST_LOCATION_ALT2: ${{ secrets.ARM_TEST_LOCATION_ALT2 }}
-          ARM_USE_OIDC: ${{ secrets.ARM_USE_OIDC }}
-          TESTARGS: ${{ secrets.TESTARGS }}
+          ARM_USE_OIDC: ${{ inputs.ARM_USE_OIDC }}
+          TESTARGS: ${{ inputs.TESTARGS }}
